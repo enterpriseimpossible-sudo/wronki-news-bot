@@ -273,8 +273,8 @@ def og_image(url):
 
 
 def fetch_meta(url):
-    """Зі сторінки новини витягує (зображення, дата публікації)."""
-    img, date = None, ""
+    """Зі сторінки новини витягує (зображення, дата публікації, timestamp)."""
+    img, date, ts = None, "", 0
     try:
         r = requests.get(url, headers=HEADERS, timeout=12)
         soup = BeautifulSoup(r.text, "html.parser")
@@ -292,7 +292,7 @@ def fetch_meta(url):
         for key, attr in (("article:published_time", "property"), ("og:updated_time", "property"), ("datePublished", "itemprop")):
             m = soup.find("meta", attrs={attr: key})
             if m and m.get("content"):
-                date, _ = _fmt_iso(m["content"])
+                date, ts = _fmt_iso(m["content"])
                 if date:
                     break
         if not date:
@@ -300,10 +300,18 @@ def fetch_meta(url):
             m = re.search(r"(20\d{2})-(\d{2})-(\d{2})", text) or re.search(r"(\d{2})[.\-](\d{2})[.\-](20\d{2})", text)
             if m:
                 g = m.groups()
-                date = f"{g[2]}.{g[1]}.{g[0]}" if len(g[0]) == 4 else f"{g[0]}.{g[1]}.{g[2]}"
+                try:
+                    if len(g[0]) == 4:
+                        date = f"{g[2]}.{g[1]}.{g[0]}"
+                        ts = datetime(int(g[0]), int(g[1]), int(g[2])).timestamp()
+                    else:
+                        date = f"{g[0]}.{g[1]}.{g[2]}"
+                        ts = datetime(int(g[2]), int(g[1]), int(g[0])).timestamp()
+                except Exception:
+                    ts = 0
     except Exception:
         pass
-    return img, date
+    return img, date, ts
 
 
 def collect_items(cfg):
@@ -452,7 +460,7 @@ def send_item(item, token, chat_id, dry_run, cfg):
     image = item.get("image")
     date = item.get("date") or ""
     if not image or not date:
-        img2, d2 = fetch_meta(item["url"])
+        img2, d2, _ = fetch_meta(item["url"])
         image = image or img2
         date = date or d2
     caption = build_caption(item, cfg, date)
@@ -513,19 +521,48 @@ def main():
         log.info("seed_all: позначено як оброблені всі %d зібрані позиції", len(items))
         return
 
+    max_age_h = max(0.0, float(cfg.get("max_age_hours", 0)))
+    cutoff = (time.time() - max_age_h * 3600) if max_age_h > 0 else 0
+
     batch_titles = set()
     fresh = []
+    stale = []
+    meta_budget = int(cfg.get("max_items", 6)) * 8
     for it in items:
         tk = normalize_title(it["title"])
         if it["url"] in posted or (tk and (tk in seen_titles or tk in batch_titles)):
             continue
         batch_titles.add(tk)
+        ts = it.get("ts") or 0
+        if not ts and meta_budget > 0:
+            img2, d2, ts2 = fetch_meta(it["url"])
+            meta_budget -= 1
+            if ts2:
+                ts = ts2
+            if not it.get("image") and img2:
+                it["image"] = img2
+            if not it.get("date") and d2:
+                it["date"] = d2
+        if cutoff and (not ts or ts < cutoff):
+            stale.append(it)
+            continue
         fresh.append(it)
     fresh = fresh[: int(cfg.get("max_items", 6))]
-    log.info("Нових для публікації: %d (зібрано %d)", len(fresh), len(items))
+    log.info("Нових для публікації: %d | старих/без дати: %d (зібрано %d)",
+             len(fresh), len(stale), len(items))
+
+    def mark_stale():
+        for it in stale:
+            posted.add(it["url"])
+            tk = normalize_title(it["title"])
+            if tk:
+                seen_titles.add(tk)
 
     if not fresh:
-        log.info("Нічого нового.")
+        if not dry_run:
+            mark_stale()
+            save_state(posted, seen_titles)
+        log.info("Нічого нового (свіжого).")
         return
 
     sent = 0
@@ -540,6 +577,7 @@ def main():
         time.sleep(2)
 
     if not dry_run:
+        mark_stale()
         save_state(posted, seen_titles)
     log.info("Готово. Оброблено: %d (стан збережено: %s)", sent, "ні" if dry_run else "так")
 
