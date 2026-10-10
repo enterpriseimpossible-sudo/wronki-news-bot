@@ -9,6 +9,7 @@
   "poll_minutes": 5,
   "publish_hours": [],
   "max_items": 5,
+  "max_age_hours": 24,
   "translate": true,
   "seed_all": false,
   "skip_urls": ["https://lubasz.pl/aktualnosci/mistrzowie-agro-2026-poznaj-nominowanych-z-gminy-lubasz.html"],
