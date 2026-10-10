@@ -252,14 +252,30 @@ def collect_items(cfg):
 
 # --------------------------------------------------------------------- переклад
 def translate_ua(text):
+    """Переклад PL→UA без ключа: Google (gtx), резерв — MyMemory."""
+    text = (text or "").strip()
     if not text:
         return ""
     try:
-        r = requests.post("https://libretranslate.com/translate",
-                          json={"q": text, "source": "pl", "target": "uk", "format": "text"}, timeout=12)
-        return r.json().get("translatedText", "")
+        r = requests.get("https://translate.googleapis.com/translate_a/single",
+                         params={"client": "gtx", "sl": "pl", "tl": "uk", "dt": "t", "q": text}, timeout=12,
+                         headers=HEADERS)
+        if r.status_code == 200:
+            data = r.json()
+            out = "".join(seg[0] for seg in data[0] if seg and seg[0])
+            if out.strip():
+                return out.strip()
     except Exception:
-        return ""
+        pass
+    try:
+        r = requests.get("https://api.mymemory.translated.net/get",
+                         params={"q": text[:480], "langpair": "pl|uk"}, timeout=12, headers=HEADERS)
+        t = r.json().get("responseData", {}).get("translatedText", "")
+        if t and "MYMEMORY WARNING" not in t:
+            return t.strip()
+    except Exception:
+        pass
+    return ""
 
 
 # ----------------------------------------------------------------------- стан
@@ -304,14 +320,29 @@ def shorten(text, limit=280):
     return (cut[:idx] if idx > 0 else cut).strip() + "…"
 
 
+def esc(s):
+    """Екранування лише для того, що Telegram HTML справді потребує (&, <, >)."""
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def build_caption(item, cfg):
-    lines = [f"<b>{html.escape(item['title'])}</b>", ""]
-    if cfg.get("translate"):
-        t = translate_ua(item["title"])
-        if t:
-            lines += [f"<i>{html.escape(t)}</i>", ""]
-    if item.get("summary"):
-        lines += [html.escape(shorten(item["summary"])), ""]
+    tr = bool(cfg.get("translate"))
+    title = item["title"]
+    summary = shorten(item["summary"]) if item.get("summary") else ""
+    if tr:
+        t_title = translate_ua(title)
+        t_sum = translate_ua(summary) if summary else ""
+    else:
+        t_title, t_sum = "", ""
+    lines = []
+    if t_title:
+        lines += [f"<b>{esc(t_title)}</b>", f"<i>{esc(title)}</i>", ""]
+    else:
+        lines += [f"<b>{esc(title)}</b>", ""]
+    if t_sum:
+        lines += [esc(t_sum), ""]
+    elif summary:
+        lines += [esc(summary), ""]
     lines.append(f'<a href="{item["url"]}">Читати повністю</a>')
     lines.append("")
     src = item.get("source", "")
