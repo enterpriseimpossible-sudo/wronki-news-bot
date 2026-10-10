@@ -1,6 +1,6 @@
 name: Wronki news bot
 
-# Запуск: вручну (workflow_dispatch) або ланцюжком (кожен прогін ставить наступний через ~4 хв),
+# Запуск: вручну (workflow_dispatch) або ланцюжком (кожен прогін ставить наступний через ~1 хв),
 # бо GitHub-розклад (cron) для цього репозиторію не спрацьовує.
 on:
   workflow_dispatch: {}
@@ -46,7 +46,7 @@ jobs:
       - name: Schedule next run (self-chain)
         if: always()
         run: |
-          sleep 240
+          sleep 60
           curl -sS -X POST \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
