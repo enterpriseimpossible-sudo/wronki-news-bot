@@ -1,9 +1,8 @@
 name: Wronki news bot
 
-# Плановий запуск кожні ~5 хв (зсув хвилин уникає округлення GitHub)
+# Плановий розклад ВИМКНЕНО: публікацію виконує сервер (systemd timer, кожні 5 хв).
+# Цей workflow лишається лише для ручного запуску (workflow_dispatch).
 on:
-  schedule:
-    - cron: "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
   workflow_dispatch: {}
 
 permissions:
