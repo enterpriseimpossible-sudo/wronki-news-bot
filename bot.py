@@ -203,6 +203,8 @@ def fetch_html(url, source_name, include=None):
         full = urljoin(url, href)
         if urlparse(full).netloc != urlparse(url).netloc:
             continue
+        if urlparse(full).path in ("", "/"):   # не публікуємо «голі» головні сторінки
+            continue
         if full in seen:
             continue
         seen.add(full)
@@ -303,10 +305,10 @@ def fetch_meta(url):
                 try:
                     if len(g[0]) == 4:
                         date = f"{g[2]}.{g[1]}.{g[0]}"
-                        ts = datetime(int(g[0]), int(g[1]), int(g[2])).timestamp()
                     else:
                         date = f"{g[0]}.{g[1]}.{g[2]}"
-                        ts = datetime(int(g[2]), int(g[1]), int(g[0])).timestamp()
+                    # знайдено лише дату (без часу) — точний timestamp невідомий
+                    ts = 0
                 except Exception:
                     ts = 0
     except Exception:
@@ -371,11 +373,19 @@ def normalize_title(t):
     return re.sub(r"\s+", " ", t).strip()
 
 
-def is_fresh(ts, cutoff):
-    """Чи свіжа новина: cutoff == 0 — беремо всі; інакше потрібен свіжий timestamp."""
+def is_fresh(ts, cutoff, date=""):
+    """Чи свіжа новина.
+
+    cutoff == 0 — беремо всі. Інакше:
+      - є точний timestamp → він має бути не старший за cutoff;
+      - timestamp немає, але вказана лише дата → свіжим вважаємо, якщо це СЬОГОДНІ
+        (щоб публікації з датою без часу не втрачалися).
+    """
     if not cutoff:
         return True
-    return bool(ts) and ts >= cutoff
+    if ts:
+        return ts >= cutoff
+    return (date or "")[:10] == datetime.now().strftime("%d.%m.%Y")
 
 
 def load_state():
@@ -551,7 +561,7 @@ def main():
                 it["image"] = img2
             if not it.get("date") and d2:
                 it["date"] = d2
-        if not is_fresh(ts, cutoff):
+        if not is_fresh(ts, cutoff, it.get("date")):
             stale.append(it)
             continue
         fresh.append(it)
