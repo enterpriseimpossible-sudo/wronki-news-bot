@@ -88,6 +88,22 @@ def env_flag(name, default="0"):
 
 
 # --------------------------------------------------------------------- геометрія
+def _fmt_dt(dt):
+    return dt.strftime("%d.%m.%Y %H:%M")
+
+
+def _fmt_iso(s):
+    """ISO-дата -> (ДД.ММ.РРРР ГГ:ХХ, timestamp)."""
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        return _fmt_dt(dt), dt.timestamp()
+    except Exception:
+        m = re.match(r"(20\d{2})-(\d{2})-(\d{2})", str(s))
+        if m:
+            return f"{m.group(3)}.{m.group(2)}.{m.group(1)}", 0
+        return "", 0
+
+
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -141,7 +157,16 @@ def fetch_rss(url, source_name):
             m = BeautifulSoup(getattr(e, "summary", ""), "html.parser").find("img")
             if m and m.get("src"):
                 img = m["src"]
-        items.append({"title": title, "url": link, "summary": desc, "image": img, "source": source_name})
+        dstr, ts = "", 0
+        pp = e.get("published_parsed") or e.get("updated_parsed")
+        if pp:
+            try:
+                dstr = _fmt_dt(datetime(*pp[:6]))
+                ts = time.mktime(pp)
+            except Exception:
+                pass
+        items.append({"title": title, "url": link, "summary": desc, "image": img,
+                      "source": source_name, "date": dstr, "ts": ts})
         if len(items) >= 30:
             break
     return items
@@ -181,7 +206,8 @@ def fetch_html(url, source_name, include=None):
         if full in seen:
             continue
         seen.add(full)
-        items.append({"title": html.unescape(title), "url": full, "summary": "", "image": None, "source": source_name})
+        items.append({"title": html.unescape(title), "url": full, "summary": "", "image": None,
+                      "source": source_name, "date": "", "ts": 0})
         if len(items) >= 20:
             break
     return items
@@ -214,7 +240,12 @@ def fetch_telegram(url, source_name):
             if m:
                 img = m.group(1)
         title = re.split(r"[\n.!?]", text, 1)[0][:120]
-        items.append({"title": title, "url": "https://t.me/" + post, "summary": text, "image": img, "source": source_name})
+        dstr, ts = "", 0
+        t = msg.find("time")
+        if t and t.get("datetime"):
+            dstr, ts = _fmt_iso(t["datetime"])
+        items.append({"title": title, "url": "https://t.me/" + post, "summary": text, "image": img,
+                      "source": source_name, "date": dstr, "ts": ts})
     return items[-20:]
 
 
@@ -241,6 +272,40 @@ def og_image(url):
     return None
 
 
+def fetch_meta(url):
+    """Зі сторінки новини витягує (зображення, дата публікації)."""
+    img, date = None, ""
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=12)
+        soup = BeautifulSoup(r.text, "html.parser")
+        for key, attr in (("og:image", "property"), ("og:image:secure_url", "property"), ("twitter:image", "name")):
+            m = soup.find("meta", attrs={attr: key})
+            if m and m.get("content") and not any(x in m["content"].lower() for x in ("logo", "icon", "sprite")):
+                img = urljoin(url, m["content"])
+                break
+        if not img:
+            for im in soup.find_all("img"):
+                src = im.get("src") or im.get("data-src")
+                if src and not any(x in src.lower() for x in ("logo", "icon", "banner", "template", "sprite", "avatar", "placeholder", "flag")):
+                    img = urljoin(url, src)
+                    break
+        for key, attr in (("article:published_time", "property"), ("og:updated_time", "property"), ("datePublished", "itemprop")):
+            m = soup.find("meta", attrs={attr: key})
+            if m and m.get("content"):
+                date, _ = _fmt_iso(m["content"])
+                if date:
+                    break
+        if not date:
+            text = soup.get_text(" ", strip=True)[:4000]
+            m = re.search(r"(20\d{2})-(\d{2})-(\d{2})", text) or re.search(r"(\d{2})[.\-](\d{2})[.\-](20\d{2})", text)
+            if m:
+                g = m.groups()
+                date = f"{g[2]}.{g[1]}.{g[0]}" if len(g[0]) == 4 else f"{g[0]}.{g[1]}.{g[2]}"
+    except Exception:
+        pass
+    return img, date
+
+
 def collect_items(cfg):
     all_items = []
     for src in active_sources(cfg):
@@ -255,7 +320,9 @@ def collect_items(cfg):
     uniq = {}
     for it in all_items:
         uniq.setdefault(it["url"], it)
-    return list(uniq.values())
+    items = list(uniq.values())
+    items.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+    return items
 
 
 # --------------------------------------------------------------------- переклад
@@ -333,7 +400,7 @@ def esc(s):
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def build_caption(item, cfg):
+def build_caption(item, cfg, date=""):
     tr = bool(cfg.get("translate"))
     title = item["title"]
     summary = shorten(item["summary"], 220) if item.get("summary") else ""
@@ -356,24 +423,39 @@ def build_caption(item, cfg):
             lines += [esc(summary), ""]
     lines.append(f'<a href="{item["url"]}">Читати повністю</a>')
     lines.append("")
+    if date:
+        lines.append(f"Опубліковано в джерелі / Data publikacji: {date}")
     src = item.get("source", "")
-    date = datetime.now().strftime("%d.%m.%Y %H:%M")
-    lines.append(f"{src} · {date}" if src else date)
+    if src:
+        lines.append(src)
     lines.append("#Wronki #Szamotuły")
     return "\n".join(lines)
 
 
-def tg(method, token, payload):
+def tg(method, token, payload, _retry=True):
     url = TELEGRAM_API.format(token=token, method=method)
     r = requests.post(url, json=payload, timeout=20)
+    if r.status_code == 429 and _retry:
+        try:
+            ra = int(r.json().get("parameters", {}).get("retry_after", 5))
+        except Exception:
+            ra = 5
+        log.warning("Ліміт Telegram — чекаю %s с і повторюю", ra)
+        time.sleep(ra + 1)
+        return tg(method, token, payload, _retry=False)
     if r.status_code != 200:
         log.error("Telegram %s → %s: %s", method, r.status_code, r.text[:300])
     return r.status_code == 200
 
 
 def send_item(item, token, chat_id, dry_run, cfg):
-    caption = build_caption(item, cfg)
-    image = item.get("image") or og_image(item["url"])
+    image = item.get("image")
+    date = item.get("date") or ""
+    if not image or not date:
+        img2, d2 = fetch_meta(item["url"])
+        image = image or img2
+        date = date or d2
+    caption = build_caption(item, cfg, date)
     if dry_run:
         log.info("[DRY-RUN] %s\nфото: %s\n%s\n---", item["url"], image or "(немає)", caption.replace("\n", " | "))
         return True
