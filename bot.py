@@ -501,12 +501,13 @@ def main():
     skip = set(cfg.get("skip_urls", []))
     if skip:
         items = [it for it in items if it["url"] not in skip]
+    batch_titles = set()
     fresh = []
     for it in items:
         tk = normalize_title(it["title"])
-        if it["url"] in posted or (tk and tk in seen_titles):
+        if it["url"] in posted or (tk and (tk in seen_titles or tk in batch_titles)):
             continue
-        seen_titles.add(tk)          # захист від дублів у межах одного запуску
+        batch_titles.add(tk)
         fresh.append(it)
     fresh = fresh[: int(cfg.get("max_items", 6))]
     log.info("Нових для публікації: %d (зібрано %d)", len(fresh), len(items))
@@ -520,6 +521,9 @@ def main():
         if send_item(it, token, chat_id, dry_run, cfg):
             if not dry_run:
                 posted.add(it["url"])
+                tk = normalize_title(it["title"])
+                if tk:
+                    seen_titles.add(tk)
             sent += 1
         time.sleep(2)
 
