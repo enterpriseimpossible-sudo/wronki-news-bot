@@ -364,10 +364,18 @@ def translate_ua(text):
 # ----------------------------------------------------------------------- стан
 def normalize_title(t):
     """Ключ заголовка для дедуплікації: без регістру, діакритики й пунктуації."""
-    t = unicodedata.normalize("NFKD", (t or "").lower())
+    t = (t or "").lower().replace("ł", "l")
+    t = unicodedata.normalize("NFKD", t)
     t = "".join(c for c in t if not unicodedata.combining(c))
     t = re.sub(r"[^a-z0-9 ]+", " ", t)
     return re.sub(r"\s+", " ", t).strip()
+
+
+def is_fresh(ts, cutoff):
+    """Чи свіжа новина: cutoff == 0 — беремо всі; інакше потрібен свіжий timestamp."""
+    if not cutoff:
+        return True
+    return bool(ts) and ts >= cutoff
 
 
 def load_state():
@@ -543,7 +551,7 @@ def main():
                 it["image"] = img2
             if not it.get("date") and d2:
                 it["date"] = d2
-        if cutoff and (not ts or ts < cutoff):
+        if not is_fresh(ts, cutoff):
             stale.append(it)
             continue
         fresh.append(it)
