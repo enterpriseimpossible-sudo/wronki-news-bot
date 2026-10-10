@@ -1,12 +1,13 @@
 name: Wronki news bot
 
-# Плановий розклад ВИМКНЕНО: публікацію виконує сервер (systemd timer, кожні 5 хв).
-# Цей workflow лишається лише для ручного запуску (workflow_dispatch).
+# Запуск: вручну (workflow_dispatch) або ланцюжком (кожен прогін ставить наступний через ~4 хв),
+# бо GitHub-розклад (cron) для цього репозиторію не спрацьовує.
 on:
   workflow_dispatch: {}
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: wronki-bot
@@ -17,34 +18,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Restore state (щоб не дублювати)
         uses: actions/cache/restore@v4
         with:
           path: state.json
           key: botstate-${{ github.run_id }}
           restore-keys: botstate-
-
       - name: Ensure state file
         run: test -f state.json || echo '{"posted":[],"titles":[]}' > state.json
-
       - name: Run bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           DRY_RUN: "0"
         run: python bot.py
-
       - name: Save state
         if: always()
         uses: actions/cache/save@v4
         with:
           path: state.json
           key: botstate-${{ github.run_id }}
+      - name: Schedule next run (self-chain)
+        if: always()
+        run: |
+          sleep 240
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/wronki.yml/dispatches \
+            -d '{"ref":"main"}'
