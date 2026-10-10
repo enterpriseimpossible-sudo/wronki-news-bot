@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Командний центр — Новини Вронки та околиць</title>
+<style>
+  :root{--navy:#0B1E33;--navy2:#132A44;--gold:#C9A24B;--cream:#F5F1E8;--mut:#96A5B9;--line:#22405f;}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0B1E33,#0e2540);color:var(--cream);font-family:"Segoe UI",Roboto,Arial,sans-serif}
+  header{padding:24px 28px;border-bottom:2px solid var(--gold)}
+  h1{margin:0;font-size:22px;font-weight:700;letter-spacing:.3px}
+  .sub{color:var(--mut);font-size:13px;margin-top:4px}
+  .wrap{max-width:980px;margin:0 auto;padding:22px 20px 60px}
+  .card{background:var(--navy2);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+  .card h2{margin:0 0 14px;font-size:16px;color:var(--gold);font-weight:600}
+  label{font-size:13px;color:var(--mut)}
+  input[type=number],input[type=text]{background:#0c2038;border:1px solid var(--line);color:var(--cream);border-radius:8px;padding:8px 10px;font-size:14px}
+  input[type=text]{width:100%}
+  .row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .hours{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;max-width:560px}
+  .hours label{display:flex;align-items:center;justify-content:center;background:#0c2038;border:1px solid var(--line);border-radius:6px;padding:6px 0;cursor:pointer;color:var(--cream);font-size:12px}
+  .hours input{display:none}
+  .hours input:checked + span{color:var(--navy)}
+  .hours label:has(input:checked){background:var(--gold);border-color:var(--gold)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{color:var(--mut);font-weight:600}
+  .dist{color:var(--gold)}
+  button{background:var(--gold);color:var(--navy);border:0;border-radius:9px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--cream);border:1px solid var(--line)}
+  button:hover{opacity:.92}
+  #log{background:#08192b;border:1px solid var(--line);border-radius:10px;padding:12px;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;max-height:340px;overflow:auto;color:#cfe0f2}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;background:#12283f;border:1px solid var(--line);color:var(--mut)}
+  .ok{color:#7fd39a}.warn{color:#e6c15a}
+</style>
+</head>
+<body>
+<header>
+  <h1>Командний центр — Новини Вронки та околиць</h1>
+  <div class="sub">Керування ботом @wronki_news_ua_bot · канал «Новини Вронки та околиці»</div>
+</header>
+<div class="wrap">
+
+  <div class="card">
+    <h2>Зона новин (радіус)</h2>
+    <div class="row">
+      <label>Центр: <b id="centerName" style="color:var(--cream)">—</b></label>
+      <label>Радіус, км:
+        <input type="number" id="radius" min="1" max="200" step="1" style="width:90px">
+      </label>
+      <span class="pill" id="srcCount">—</span>
+    </div>
+    <div class="sub" style="margin-top:8px">У зону потрапляють лише увімкнені джерела в межах радіусу від центру.</div>
+  </div>
+
+  <div class="card">
+    <h2>Коли публікувати</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label><input type="checkbox" id="instant"> публікувати ОДРАЗУ, як з'явиться на сайті (перевірка кожні
+        <input type="number" id="poll" min="1" max="120" style="width:64px"> хв)</label>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <label><input type="checkbox" id="allHours"> або за розкладом — кожну годину</label>
+    </div>
+    <div class="hours" id="hours"></div>
+    <div class="sub" style="margin-top:8px">Режим «одразу» має приоритет і ігнорує години нижче. Якщо вимкнути «одразу» — обери «кожну годину» або познач конкретні години (0–23).</div>
+  </div>
+
+  <div class="card">
+    <h2>Параметри</h2>
+    <div class="row">
+      <label>Публікацій за раз: <input type="number" id="maxItems" min="1" max="30" style="width:80px"></label>
+      <label><input type="checkbox" id="translate"> перекладати заголовки PL → UA</label>
+      <label><input type="checkbox" id="enabled"> бот увімкнений</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Джерела</h2>
+    <table><thead><tr><th>Увімк.</th><th>Джерело</th><th>Місто</th><th>Відстань</th><th>Тип</th><th>URL</th></tr></thead>
+    <tbody id="srcBody"></tbody></table>
+    <div class="row" style="margin-top:12px"><button class="ghost" id="addSrc">+ додати джерело</button></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="save">Зберегти налаштування</button>
+      <button class="ghost" id="test">Тест (без публікації)</button>
+      <button id="run">Опублікувати зараз</button>
+      <span id="saveMsg" class="sub"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Журнал останнього запуску</h2>
+    <div id="log">—</div>
+  </div>
+
+</div>
+
+<script>
+let cfg = null;
+const $ = id => document.getElementById(id);
+
+function haversine(la1,lo1,la2,lo2){const R=6371,t=Math.PI/180;
+  const dLa=(la2-la1)*t,dLo=(lo2-lo1)*t;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*t)*Math.cos(la2*t)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));}
+
+function render(){
+  $('centerName').textContent = cfg.center.name;
+  $('radius').value = cfg.radius_km;
+  $('maxItems').value = cfg.max_items;
+  $('translate').checked = !!cfg.translate;
+  $('enabled').checked = !!cfg.enabled;
+  $('instant').checked = !!cfg.instant;
+  $('poll').value = cfg.poll_minutes || 5;
+  const hours = cfg.publish_hours || [];
+  $('allHours').checked = hours.length === 0;
+  const box = $('hours'); box.innerHTML='';
+  for(let h=0;h<24;h++){
+    const l=document.createElement('label');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.value=h;
+    cb.checked = hours.includes(h); cb.dataset.hour = h;
+    const s=document.createElement('span'); s.textContent=(h<10?'0':'')+h;
+    l.appendChild(cb); l.appendChild(s); box.appendChild(l);
+  }
+  renderSources();
+}
+
+function renderSources(){
+  const body=$('srcBody'); body.innerHTML='';
+  const c=cfg.center, r=Number($('radius').value)||cfg.radius_km;
+  let inZone=0;
+  cfg.sources.forEach((s,i)=>{
+    const d = (s.lat!=null&&s.lon!=null) ? haversine(c.lat,c.lon,s.lat,s.lon) : null;
+    const ok = s.enabled && (d==null || d<=r);
+    if(ok) inZone++;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" ${s.enabled?'checked':''} data-i="${i}" class="en"></td>
+      <td>${s.name}</td>
+      <td>${s.city||''}</td>
+      <td class="dist">${d==null?'—':d.toFixed(1)+' км'}</td>
+      <td><select data-i="${i}" class="typ"><option value="rss"${s.type==='rss'?' selected':''}>rss</option><option value="html"${s.type==='html'?' selected':''}>html</option><option value="tg"${s.type==='tg'?' selected':''}>tg</option></select></td>
+      <td><input type="text" value="${(s.url||'').replace(/"/g,'&quot;')}" data-i="${i}" class="url"></td>`;
+    body.appendChild(tr);
+  });
+  $('srcCount').textContent = inZone + ' джерел у зоні';
+  $('srcCount').className = 'pill ' + (inZone>0?'ok':'warn');
+}
+
+function collect(){
+  cfg.radius_km = Number($('radius').value)||20;
+  cfg.max_items = Number($('maxItems').value)||6;
+  cfg.translate = $('translate').checked;
+  cfg.enabled = $('enabled').checked;
+  cfg.instant = $('instant').checked;
+  cfg.poll_minutes = Number($('poll').value)||5;
+  cfg.publish_hours = $('allHours').checked ? [] :
+     [...document.querySelectorAll('#hours input:checked')].map(x=>Number(x.value));
+  document.querySelectorAll('.en').forEach(cb=>{ cfg.sources[cb.dataset.i].enabled = cb.checked; });
+  document.querySelectorAll('.typ').forEach(sel=>{ cfg.sources[sel.dataset.i].type = sel.value; });
+  document.querySelectorAll('.url').forEach(inp=>{ cfg.sources[inp.dataset.i].url = inp.value.trim(); });
+  return cfg;
+}
+
+async function loadConfig(){
+  cfg = await (await fetch('/api/config')).json();
+  render();
+  loadLog();
+}
+async function loadLog(){
+  const t = await (await fetch('/api/log')).text();
+  $('log').textContent = t || '—';
+}
+$('radius').addEventListener('input', renderSources);
+$('addSrc').onclick = ()=>{
+  collect();
+  cfg.sources.push({name:'Нове джерело', city:'', lat:null, lon:null, url:'', type:'html', include:'aktualnosci', enabled:true});
+  renderSources();
+};
+$('save').onclick = async ()=>{
+  collect();
+  const r = await (await fetch('/api/config',{method:'POST',body:JSON.stringify(cfg)})).json();
+  $('saveMsg').textContent = r.ok ? 'Збережено' : ('Помилка: '+r.error);
+  setTimeout(()=>$('saveMsg').textContent='',3000);
+};
+$('test').onclick = async ()=>{ $('log').textContent='Запуск (тест)…'; $('log').textContent = await (await fetch('/api/run?dry=1',{method:'POST'})).text(); };
+$('run').onclick  = async ()=>{ $('log').textContent='Публікація…'; $('log').textContent = await (await fetch('/api/run?dry=0',{method:'POST'})).text(); };
+
+loadConfig();
+</script>
+</body>
+</html>

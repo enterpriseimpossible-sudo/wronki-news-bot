@@ -1,0 +1,50 @@
+name: Wronki news bot
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wronki-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore state (щоб не дублювати)
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: botstate-${{ github.run_id }}
+          restore-keys: botstate-
+
+      - name: Ensure state file
+        run: test -f state.json || echo '{"posted":[],"titles":[]}' > state.json
+
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          DRY_RUN: "0"
+        run: python bot.py
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: botstate-${{ github.run_id }}

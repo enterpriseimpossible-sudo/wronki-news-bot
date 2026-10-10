@@ -1,0 +1,11 @@
+.env
+.venv/
+state.json
+__pycache__/
+*.pyc
+*.pid
+*.log
+panel_run.log
+panel.out.log
+panel.err.log
+brand/
