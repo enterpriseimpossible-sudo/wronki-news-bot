@@ -222,12 +222,20 @@ def og_image(url):
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
-        og = soup.find("meta", property="og:image")
-        if og and og.get("content"):
-            return og["content"]
-        img = soup.find("img")
-        if img and img.get("src"):
-            return urljoin(url, img["src"])
+        for key, attr in (("og:image", "property"), ("og:image:secure_url", "property"), ("twitter:image", "name")):
+            m = soup.find("meta", attrs={attr: key})
+            if m and m.get("content"):
+                c = m["content"]
+                if not any(x in c.lower() for x in ("logo", "icon", "sprite")):
+                    return urljoin(url, c)
+        for img in soup.find_all("img"):
+            src = img.get("src") or img.get("data-src")
+            if not src:
+                continue
+            low = src.lower()
+            if any(x in low for x in ("logo", "icon", "banner", "template", "sprite", "avatar", "placeholder", "flag")):
+                continue
+            return urljoin(url, src)
     except Exception:
         pass
     return None
@@ -352,8 +360,7 @@ def build_caption(item, cfg):
     date = datetime.now().strftime("%d.%m.%Y %H:%M")
     lines.append(f"{src} · {date}" if src else date)
     lines.append("#Wronki #Szamotuły")
-    caption = "\n".join(lines)
-    return caption[:1020]
+    return "\n".join(lines)
 
 
 def tg(method, token, payload):
@@ -373,7 +380,11 @@ def send_item(item, token, chat_id, dry_run, cfg):
     if image:
         if tg("sendPhoto", token, {"chat_id": chat_id, "photo": image, "caption": caption, "parse_mode": "HTML"}):
             return True
-        log.info("Фото не пішло, надсилаю текстом: %s", item["url"])
+        # друга спроба: фото без підпису + підпис окремим повідомленням
+        log.info("Підпис до фото не пройшов, надсилаю фото і текст окремо: %s", item["url"])
+        if tg("sendPhoto", token, {"chat_id": chat_id, "photo": image}):
+            return tg("sendMessage", token, {"chat_id": chat_id, "text": caption, "parse_mode": "HTML"})
+        log.info("Фото не пішло, надсилаю лише текстом: %s", item["url"])
     return tg("sendMessage", token, {"chat_id": chat_id, "text": caption, "parse_mode": "HTML"})
 
 
