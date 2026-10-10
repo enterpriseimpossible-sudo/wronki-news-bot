@@ -69,7 +69,7 @@ def load_config():
     default = {
         "center": {"name": "Wronki", "lat": 52.7111, "lon": 16.3803},
         "radius_km": 20, "publish_hours": [], "max_items": 6, "translate": False,
-        "enabled": True, "sources": [],
+        "enabled": True, "skip_urls": [], "sources": [],
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -416,7 +416,9 @@ def main():
 
     posted, seen_titles = load_state()
     items = collect_items(cfg)
-
+    skip = set(cfg.get("skip_urls", []))
+    if skip:
+        items = [it for it in items if it["url"] not in skip]
     fresh = []
     for it in items:
         tk = normalize_title(it["title"])
