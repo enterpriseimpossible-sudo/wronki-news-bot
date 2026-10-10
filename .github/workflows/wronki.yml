@@ -3,7 +3,12 @@ name: Wronki news bot
 # Запуск: вручну (workflow_dispatch) або ланцюжком (кожен прогін ставить наступний через ~1 хв),
 # бо GitHub-розклад (cron) для цього репозиторію не спрацьовує.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: "Скинути стан бота (почати з нуля)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +36,9 @@ jobs:
           restore-keys: botstate-
       - name: Ensure state file
         run: test -f state.json || echo '{"posted":[],"titles":[]}' > state.json
+      - name: Reset state (if requested)
+        if: ${{ inputs.reset }}
+        run: echo '{"posted":[],"titles":[]}' > state.json
       - name: Run bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
