@@ -328,28 +328,32 @@ def esc(s):
 def build_caption(item, cfg):
     tr = bool(cfg.get("translate"))
     title = item["title"]
-    summary = shorten(item["summary"]) if item.get("summary") else ""
+    summary = shorten(item["summary"], 220) if item.get("summary") else ""
+    lines = []
     if tr:
         t_title = translate_ua(title)
         t_sum = translate_ua(summary) if summary else ""
-    else:
-        t_title, t_sum = "", ""
-    lines = []
-    if t_title:
-        lines += [f"<b>{esc(t_title)}</b>", f"<i>{esc(title)}</i>", ""]
+        if t_title:
+            lines += [f"<b>{esc(t_title)}</b>"]
+            if t_sum:
+                lines.append(esc(t_sum))
+            lines.append("")
+        lines += [f"<i>{esc(title)}</i>"]
+        if summary:
+            lines.append(esc(summary))
+        lines.append("")
     else:
         lines += [f"<b>{esc(title)}</b>", ""]
-    if t_sum:
-        lines += [esc(t_sum), ""]
-    elif summary:
-        lines += [esc(summary), ""]
+        if summary:
+            lines += [esc(summary), ""]
     lines.append(f'<a href="{item["url"]}">Читати повністю</a>')
     lines.append("")
     src = item.get("source", "")
     date = datetime.now().strftime("%d.%m.%Y %H:%M")
     lines.append(f"{src} · {date}" if src else date)
     lines.append("#Wronki #Szamotuły")
-    return "\n".join(lines)
+    caption = "\n".join(lines)
+    return caption[:1020]
 
 
 def tg(method, token, payload):
