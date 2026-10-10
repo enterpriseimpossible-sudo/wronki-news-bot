@@ -9,7 +9,7 @@
   "poll_minutes": 1,
   "publish_hours": [],
   "max_items": 5,
-  "max_age_hours": 72,
+  "max_age_hours": 1,
   "translate": true,
   "seed_all": false,
   "skip_urls": [
