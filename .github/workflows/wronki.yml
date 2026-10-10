@@ -32,8 +32,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: state.json
-          key: botstate-${{ github.run_id }}
-          restore-keys: botstate-
+          key: botstate2-${{ github.run_id }}
+          restore-keys: botstate2-
       - name: Ensure state file
         run: test -f state.json || echo '{"posted":[],"titles":[]}' > state.json
       - name: Reset state (if requested)
@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: state.json
-          key: botstate-${{ github.run_id }}
+          key: botstate2-${{ github.run_id }}
       - name: Schedule next run (self-chain)
         if: always()
         run: |
