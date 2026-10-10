@@ -1,8 +1,9 @@
 name: Wronki news bot
 
+# Плановий запуск кожні ~5 хв (зсув хвилин уникає округлення GitHub)
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
   workflow_dispatch: {}
 
 permissions:
