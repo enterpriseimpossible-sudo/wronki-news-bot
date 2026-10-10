@@ -8,7 +8,7 @@
   "instant": true,
   "poll_minutes": 5,
   "publish_hours": [],
-  "max_items": 8,
+  "max_items": 5,
   "translate": true,
   "seed_all": false,
   "skip_urls": ["https://lubasz.pl/aktualnosci/mistrzowie-agro-2026-poznaj-nominowanych-z-gminy-lubasz.html"],
@@ -216,6 +216,78 @@
       "lat": 52.4064,
       "lon": 16.9252,
       "url": "https://gloswielkopolski.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "WOK Wronki (культура)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://wokwronki.pl/rss/aktualnosci.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Moje Wronki (портал)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://mojewronki.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Parafia św. Katarzyny",
+      "city": "Wronki",
+      "lat": 52.7092,
+      "lon": 16.3722,
+      "url": "https://farawronki.pl/ogloszenia",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Parafia św. Urszuli",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://swurszula-wronki.pl/rss/aktualnosci.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Błękitni Wronki (спорт)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://blekitniwronki.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Рада міста Wronki (eSesja)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://wronki.esesja.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "GoWork Wronki (праця)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://www.gowork.pl/praca/wronki;l",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Pracuj.pl Wronki (праця)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://www.pracuj.pl/praca/wronki;wp",
       "type": "html",
       "enabled": true
     },
