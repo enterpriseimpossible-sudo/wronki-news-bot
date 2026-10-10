@@ -1,5 +1,9 @@
 {
-  "center": { "name": "Wronki", "lat": 52.7111, "lon": 16.3803 },
+  "center": {
+    "name": "Wronki",
+    "lat": 52.7111,
+    "lon": 16.3803
+  },
   "radius_km": 30,
   "instant": true,
   "poll_minutes": 5,
@@ -8,35 +12,282 @@
   "translate": false,
   "enabled": true,
   "sources": [
-    { "name": "Gmina Wronki", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://wronki.pl/rss/aktualnosci.xml", "type": "rss", "enabled": true },
-    { "name": "Gmina Szamotuły", "city": "Szamotuły", "lat": 52.6119, "lon": 16.5819, "url": "https://szamotuly.pl/rss/aktualnosci_pl.xml", "type": "rss", "enabled": true },
-    { "name": "Gmina Lubasz", "city": "Lubasz", "lat": 52.7589, "lon": 16.4836, "url": "https://lubasz.pl/rss/aktualnosci.xml", "type": "rss", "enabled": true },
-    { "name": "Gmina Pniewy", "city": "Pniewy", "lat": 52.5103, "lon": 16.2894, "url": "https://www.pniewy.wlkp.pl/rss/aktualnosci.xml", "type": "rss", "enabled": true },
-    { "name": "Gmina Chrzypsko Wielkie", "city": "Chrzypsko Wielkie", "lat": 52.6028, "lon": 16.2056, "url": "https://chrzypsko.pl/rss/aktualnosci.xml", "type": "rss", "enabled": true },
-    { "name": "Gmina Obrzycko", "city": "Obrzycko", "lat": 52.7006, "lon": 16.4958, "url": "https://www.obrzycko.pl/", "type": "html", "enabled": true },
-    { "name": "Gmina Lwówek", "city": "Lwówek", "lat": 52.4497, "lon": 16.1811, "url": "https://www.lwowek.com.pl/", "type": "html", "enabled": true },
-    { "name": "Gmina Duszniki", "city": "Duszniki", "lat": 52.5308, "lon": 16.3719, "url": "https://www.duszniki.eu/", "type": "html", "enabled": true },
-    { "name": "Gmina Kaźmierz", "city": "Kaźmierz", "lat": 52.5672, "lon": 16.5983, "url": "https://www.kazmierz.pl/", "type": "html", "enabled": true },
-    { "name": "Gmina Ostroróg", "city": "Ostroróg", "lat": 52.6161, "lon": 16.4531, "url": "https://www.ostrorog.pl/", "type": "html", "enabled": true },
-    { "name": "Powiat Szamotulski", "city": "Szamotuły", "lat": 52.6119, "lon": 16.5819, "url": "https://www.powiat-szamotuly.pl/", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Gmina Sieraków", "city": "Sieraków", "lat": 52.6497, "lon": 16.0686, "url": "https://www.sierakow.pl/", "type": "html", "enabled": true },
-    { "name": "Gmina Oborniki", "city": "Oborniki", "lat": 52.6464, "lon": 16.8117, "url": "https://oborniki.pl/", "type": "html", "enabled": true },
-    { "name": "Gmina Międzychód", "city": "Międzychód", "lat": 52.5994, "lon": 15.8961, "url": "https://www.miedzychod.pl/", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Miasto Wągrowiec", "city": "Wągrowiec", "lat": 52.8090, "lon": 17.1996, "url": "https://www.wagrowiec.eu/pl/aktualnosci", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Policja Szamotuły", "city": "Szamotuły", "lat": 52.6119, "lon": 16.5819, "url": "https://szamotuly.policja.gov.pl/", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Policja Wągrowiec", "city": "Wągrowiec", "lat": 52.8090, "lon": 17.1996, "url": "https://wagrowiec.policja.gov.pl/", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Policja Oborniki", "city": "Oborniki", "lat": 52.6464, "lon": 16.8117, "url": "https://oborniki.policja.gov.pl/", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Wielkopolska Policja", "city": "Poznań", "lat": 52.4064, "lon": 16.9252, "url": "https://wielkopolska.policja.gov.pl/", "type": "html", "include": "aktualnosci", "enabled": true },
-    { "name": "Straż Pożarna Szamotuły", "city": "Szamotuły", "lat": 52.6119, "lon": 16.5819, "url": "https://www.gov.pl/web/kppsp-szamotuly", "type": "html", "enabled": true },
-    { "name": "Wroniecki Bazar", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://wronieckibazar.pl/", "type": "html", "enabled": true },
-    { "name": "Głos Wielkopolski", "city": "Poznań", "lat": 52.4064, "lon": 16.9252, "url": "https://gloswielkopolski.pl/", "type": "html", "enabled": true },
-    { "name": "YouTube: Dziewiątka Wronki (не тягне)", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCyAfyDIAe9XvgKUT5OQJ31g", "type": "rss", "enabled": false },
-    { "name": "Naszemiasto Wronki (не тягне)", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://wronki.naszemiasto.pl/", "type": "html", "enabled": false },
-    { "name": "Facebook: Gmina Wronki (не тягне)", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://www.facebook.com/GminaWronki", "type": "html", "enabled": false },
-    { "name": "Instagram: gmina_wronki (не тягне)", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://www.instagram.com/gmina_wronki/", "type": "html", "enabled": false },
-    { "name": "Telegram-канал — встав свій у URL", "city": "Wronki", "lat": 52.7111, "lon": 16.3803, "url": "https://t.me/s/", "type": "tg", "enabled": false },
-    { "name": "Gmina Nowy Tomyśl (не тягне)", "city": "Nowy Tomyśl", "lat": 52.3078, "lon": 16.1283, "url": "https://www.nowytomysl.pl/", "type": "html", "enabled": false },
-    { "name": "Policja Nowy Tomyśl (не тягне)", "city": "Nowy Tomyśl", "lat": 52.3078, "lon": 16.1283, "url": "https://nowytomysl.policja.gov.pl/", "type": "html", "enabled": false },
-    { "name": "Naszemiasto Szamotuły (не тягне)", "city": "Szamotuły", "lat": 52.6119, "lon": 16.5819, "url": "https://szamotuly.naszemiasto.pl/", "type": "html", "enabled": false }
+    {
+      "name": "Gmina Wronki",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://wronki.pl/rss/aktualnosci.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Szamotuły",
+      "city": "Szamotuły",
+      "lat": 52.6119,
+      "lon": 16.5819,
+      "url": "https://szamotuly.pl/rss/aktualnosci_pl.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Lubasz",
+      "city": "Lubasz",
+      "lat": 52.7589,
+      "lon": 16.4836,
+      "url": "https://lubasz.pl/rss/aktualnosci.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Pniewy",
+      "city": "Pniewy",
+      "lat": 52.5103,
+      "lon": 16.2894,
+      "url": "https://www.pniewy.wlkp.pl/rss/aktualnosci.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Chrzypsko Wielkie",
+      "city": "Chrzypsko Wielkie",
+      "lat": 52.6028,
+      "lon": 16.2056,
+      "url": "https://chrzypsko.pl/rss/aktualnosci.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Obrzycko",
+      "city": "Obrzycko",
+      "lat": 52.7006,
+      "lon": 16.4958,
+      "url": "https://www.obrzycko.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Lwówek",
+      "city": "Lwówek",
+      "lat": 52.4497,
+      "lon": 16.1811,
+      "url": "https://www.lwowek.com.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Duszniki",
+      "city": "Duszniki",
+      "lat": 52.5308,
+      "lon": 16.3719,
+      "url": "https://www.duszniki.eu/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Kaźmierz",
+      "city": "Kaźmierz",
+      "lat": 52.5672,
+      "lon": 16.5983,
+      "url": "https://www.kazmierz.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Ostroróg",
+      "city": "Ostroróg",
+      "lat": 52.6161,
+      "lon": 16.4531,
+      "url": "https://www.ostrorog.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Powiat Szamotulski",
+      "city": "Szamotuły",
+      "lat": 52.6119,
+      "lon": 16.5819,
+      "url": "https://www.powiat-szamotuly.pl/",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Sieraków",
+      "city": "Sieraków",
+      "lat": 52.6497,
+      "lon": 16.0686,
+      "url": "https://www.sierakow.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Oborniki",
+      "city": "Oborniki",
+      "lat": 52.6464,
+      "lon": 16.8117,
+      "url": "https://oborniki.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Międzychód",
+      "city": "Międzychód",
+      "lat": 52.5994,
+      "lon": 15.8961,
+      "url": "https://www.miedzychod.pl/",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Miasto Wągrowiec",
+      "city": "Wągrowiec",
+      "lat": 52.809,
+      "lon": 17.1996,
+      "url": "https://www.wagrowiec.eu/pl/aktualnosci",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Policja Szamotuły",
+      "city": "Szamotuły",
+      "lat": 52.6119,
+      "lon": 16.5819,
+      "url": "https://szamotuly.policja.gov.pl/",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Policja Wągrowiec",
+      "city": "Wągrowiec",
+      "lat": 52.809,
+      "lon": 17.1996,
+      "url": "https://wagrowiec.policja.gov.pl/",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Policja Oborniki",
+      "city": "Oborniki",
+      "lat": 52.6464,
+      "lon": 16.8117,
+      "url": "https://oborniki.policja.gov.pl/",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Wielkopolska Policja",
+      "city": "Poznań",
+      "lat": 52.4064,
+      "lon": 16.9252,
+      "url": "https://wielkopolska.policja.gov.pl/",
+      "type": "html",
+      "include": "aktualnosci",
+      "enabled": true
+    },
+    {
+      "name": "Straż Pożarna Szamotuły",
+      "city": "Szamotuły",
+      "lat": 52.6119,
+      "lon": 16.5819,
+      "url": "https://www.gov.pl/web/kppsp-szamotuly",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Wroniecki Bazar",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://wronieckibazar.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Głos Wielkopolski",
+      "city": "Poznań",
+      "lat": 52.4064,
+      "lon": 16.9252,
+      "url": "https://gloswielkopolski.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "YouTube: Dziewiątka Wronki (не тягне)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCyAfyDIAe9XvgKUT5OQJ31g",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Naszemiasto Wronki (не тягне)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://wronki.naszemiasto.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Facebook: Gmina Wronki (не тягне)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://www.facebook.com/GminaWronki",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Instagram: gmina_wronki (не тягне)",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://www.instagram.com/gmina_wronki/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Telegram-канал — встав свій у URL",
+      "city": "Wronki",
+      "lat": 52.7111,
+      "lon": 16.3803,
+      "url": "https://t.me/s/",
+      "type": "tg",
+      "enabled": true
+    },
+    {
+      "name": "Gmina Nowy Tomyśl (не тягне)",
+      "city": "Nowy Tomyśl",
+      "lat": 52.3078,
+      "lon": 16.1283,
+      "url": "https://www.nowytomysl.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Policja Nowy Tomyśl (не тягне)",
+      "city": "Nowy Tomyśl",
+      "lat": 52.3078,
+      "lon": 16.1283,
+      "url": "https://nowytomysl.policja.gov.pl/",
+      "type": "html",
+      "enabled": true
+    },
+    {
+      "name": "Naszemiasto Szamotuły (не тягне)",
+      "city": "Szamotuły",
+      "lat": 52.6119,
+      "lon": 16.5819,
+      "url": "https://szamotuly.naszemiasto.pl/",
+      "type": "html",
+      "enabled": true
+    }
   ]
 }
