@@ -501,6 +501,18 @@ def main():
     skip = set(cfg.get("skip_urls", []))
     if skip:
         items = [it for it in items if it["url"] not in skip]
+
+    if cfg.get("seed_all"):
+        for it in items:
+            posted.add(it["url"])
+            tk = normalize_title(it["title"])
+            if tk:
+                seen_titles.add(tk)
+        if not dry_run:
+            save_state(posted, seen_titles)
+        log.info("seed_all: позначено як оброблені всі %d зібрані позиції", len(items))
+        return
+
     batch_titles = set()
     fresh = []
     for it in items:
