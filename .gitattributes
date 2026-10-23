@@ -1,0 +1,3 @@
+# Скрипти виконуються на Linux-раннері GitHub Actions.
+# CRLF у .sh дає "bad interpreter: /bin/bash^M" — тому примусово LF.
+*.sh text eol=lf

@@ -524,6 +524,12 @@ def main():
 
     posted, seen_titles = load_state()
     items = collect_items(cfg)
+    sources = active_sources(cfg)
+    if not items and sources:
+        # 38 джерел не можуть одночасно «не мати новин»: це поломка парсингу або
+        # блокування. Краще червоний прогін, ніж зелений і тихий.
+        log.error("Жодне з %d увімкнених джерел не дало новин — перевір доступ до джерел.", len(sources))
+        return 1
     skip = set(cfg.get("skip_urls", []))
     if skip:
         items = [it for it in items if it["url"] not in skip]
@@ -584,6 +590,7 @@ def main():
         return
 
     sent = 0
+    failed = 0
     for it in fresh:
         if send_item(it, token, chat_id, dry_run, cfg):
             if not dry_run:
@@ -592,13 +599,21 @@ def main():
                 if tk:
                     seen_titles.add(tk)
             sent += 1
+        else:
+            failed += 1
+            log.error("Не опубліковано: %s", it["url"])
         time.sleep(2)
 
     if not dry_run:
         mark_stale()
         save_state(posted, seen_titles)
-    log.info("Готово. Оброблено: %d (стан збережено: %s)", sent, "ні" if dry_run else "так")
+    log.info("Готово. Надіслано: %d, не вдалося: %d (стан збережено: %s)",
+             sent, failed, "ні" if dry_run else "так")
+    if failed and not dry_run:
+        log.error("Частина публікацій не пройшла — прогін позначено невдалим, щоб це було видно.")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
