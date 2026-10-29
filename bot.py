@@ -18,10 +18,11 @@ import math
 import time
 import html
 import re
+import calendar
 import unicodedata
 import logging
 from datetime import datetime
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
 
@@ -87,6 +88,54 @@ def env_flag(name, default="0"):
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
+# ----------------------------------------------------------------------- мережа
+TRACKING_PARAMS = ("utm_", "fbclid", "gclid", "yclid", "mc_cid", "mc_eid", "ref_")
+
+
+def canon_url(url):
+    """Ключ URL для дедуплікації: без якоря, трекінгових міток і хвостового слеша.
+
+    Одна й та сама новина часто приходить із різних джерел з різними мітками
+    (`?utm_source=rss`, `#top`). Без канонізації це два пости про одну подію.
+    """
+    url = (url or "").strip()
+    if not url:
+        return ""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return url
+    netloc = parts.netloc.lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if not k.lower().startswith(TRACKING_PARAMS)]
+    path = parts.path.rstrip("/")
+    return urlunsplit((parts.scheme.lower(), netloc, path, urlencode(query), ""))
+
+
+def http_get(url, timeout=15, attempts=2):
+    """GET із повторною спробою. None, якщо не вдалося (помилка вже в лог)."""
+    last = "?"
+    for attempt in range(1, attempts + 1):
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            if r.status_code >= 500:
+                last = f"HTTP {r.status_code}"
+            elif r.status_code >= 400:
+                # 403/404 повторювати немає сенсу: відповідь не зміниться.
+                log.warning("HTTP %s: %s", r.status_code, url)
+                return None
+            else:
+                return r
+        except requests.RequestException as e:
+            last = f"{type(e).__name__}: {e}"
+        if attempt < attempts:
+            time.sleep(1.5 * attempt)
+    log.warning("Не вдалося завантажити %s (%s)", url, last)
+    return None
+
+
 # --------------------------------------------------------------------- геометрія
 def _fmt_dt(dt):
     return dt.strftime("%d.%m.%Y %H:%M")
@@ -119,7 +168,7 @@ def active_sources(cfg):
     radius = float(cfg.get("radius_km", 20))
     out = []
     for s in cfg.get("sources", []):
-        if not s.get("enabled", True):
+        if not s.get("enabled", True) or not s.get("url"):
             continue
         if s.get("url") and (s.get("lat") is None or s.get("lon") is None):
             out.append(s)
@@ -136,49 +185,72 @@ def active_sources(cfg):
 
 
 # ------------------------------------------------------------------- збір новин
+def _rss_ts(pp):
+    """struct_time від feedparser — у UTC. mktime() зсунув би його на локальну зону."""
+    try:
+        return calendar.timegm(tuple(pp)[:9])
+    except Exception:
+        return 0
+
+
+def rss_image(entry):
+    """Картинка з RSS: media:content / media:thumbnail / enclosure / <img> в описі."""
+    for key in ("media_content", "media_thumbnail"):
+        for media in entry.get(key) or []:
+            if media.get("url"):
+                return media["url"]
+    for enc in entry.get("enclosures") or []:
+        if enc.get("href") or enc.get("url"):
+            return enc.get("href") or enc.get("url")
+    img = BeautifulSoup(getattr(entry, "summary", "") or "", "html.parser").find("img")
+    return img.get("src") if img and img.get("src") else None
+
+
 def fetch_rss(url, source_name):
+    """RSS через requests + feedparser.
+
+    feedparser.parse(url) тягне стрічку власним клієнтом: без нашого User-Agent,
+    без таймауту й без повідомлення про помилку. Через це частина стрічок тихо
+    віддавала 0 новин (локально — ще й падала на SSL). Тепер: запит робимо самі,
+    розбираємо вже завантажені байти, а помилку видно в лозі.
+    """
     items = []
     if feedparser is None:
         return items
-    feed = feedparser.parse(url)
-    for e in feed.entries:
+    resp = http_get(url, timeout=20)
+    if resp is None:
+        return items
+    try:
+        feed = feedparser.parse(resp.content)
+    except Exception as e:
+        log.warning("RSS не розібрано %s: %s", url, e)
+        return items
+    if feed.bozo and not feed.entries:
+        log.warning("RSS не розібрано %s: %s", url, str(feed.get("bozo_exception"))[:200])
+        return items
+    for e in feed.entries[:30]:
         title = html.unescape(getattr(e, "title", "")).strip()
         link = getattr(e, "link", "").strip()
         if not title or not link:
             continue
         desc = BeautifulSoup(getattr(e, "summary", "") or "", "html.parser").get_text(" ", strip=True)
-        img = None
-        enc = e.get("enclosures") or []
-        if enc:
-            img = enc[0].get("href") or enc[0].get("url")
-        if not img and e.get("tcfotob"):
-            img = e.get("tcfotob")
-        if not img:
-            m = BeautifulSoup(getattr(e, "summary", ""), "html.parser").find("img")
-            if m and m.get("src"):
-                img = m["src"]
         dstr, ts = "", 0
         pp = e.get("published_parsed") or e.get("updated_parsed")
         if pp:
             try:
                 dstr = _fmt_dt(datetime(*pp[:6]))
-                ts = time.mktime(pp)
+                ts = _rss_ts(pp)
             except Exception:
                 pass
-        items.append({"title": title, "url": link, "summary": desc, "image": img,
+        items.append({"title": title, "url": link, "summary": desc, "image": rss_image(e),
                       "source": source_name, "date": dstr, "ts": ts})
-        if len(items) >= 30:
-            break
     return items
 
 
 def fetch_html(url, source_name, include=None):
     items = []
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        r.raise_for_status()
-    except Exception as e:
-        log.warning("Джерело недоступне %s: %s", url, e)
+    r = http_get(url)
+    if r is None:
         return items
     soup = BeautifulSoup(r.text, "html.parser")
     seen = set()
@@ -220,11 +292,8 @@ def fetch_telegram(url, source_name):
     items = []
     if "t.me/s/" not in url and "t.me/" in url:
         url = url.replace("t.me/", "t.me/s/")
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        r.raise_for_status()
-    except Exception as e:
-        log.warning("Telegram недоступний %s: %s", url, e)
+    r = http_get(url)
+    if r is None:
         return items
     soup = BeautifulSoup(r.text, "html.parser")
     for msg in soup.find_all("div", class_="tgme_widget_message"):
@@ -329,7 +398,9 @@ def collect_items(cfg):
         all_items.extend(got)
     uniq = {}
     for it in all_items:
-        uniq.setdefault(it["url"], it)
+        if urlparse(it.get("url", "")).scheme not in ("http", "https"):
+            continue
+        uniq.setdefault(canon_url(it["url"]), it)
     items = list(uniq.values())
     items.sort(key=lambda x: x.get("ts") or 0, reverse=True)
     return items
@@ -365,11 +436,16 @@ def translate_ua(text):
 
 # ----------------------------------------------------------------------- стан
 def normalize_title(t):
-    """Ключ заголовка для дедуплікації: без регістру, діакритики й пунктуації."""
+    """Ключ заголовка для дедуплікації: без регістру, діакритики й пунктуації.
+
+    Літери лишаємо будь-якої мови: раніше ключ зберігав тільки [a-z0-9], тому
+    українські заголовки (Telegram-джерела) давали порожній ключ і дедуплікація
+    за назвою для них не працювала.
+    """
     t = (t or "").lower().replace("ł", "l")
     t = unicodedata.normalize("NFKD", t)
     t = "".join(c for c in t if not unicodedata.combining(c))
-    t = re.sub(r"[^a-z0-9 ]+", " ", t)
+    t = re.sub(r"[^\w ]+", " ", t, flags=re.UNICODE).replace("_", " ")
     return re.sub(r"\s+", " ", t).strip()
 
 
@@ -385,7 +461,23 @@ def is_fresh(ts, cutoff, date=""):
         return True
     if ts:
         return ts >= cutoff
-    return (date or "")[:10] == datetime.now().strftime("%d.%m.%Y")
+    return (date or "")[:10] in _today_strings()
+
+
+def _today_strings():
+    """«Сьогодні» (ДД.ММ.РРРР) і за часом джерел (Польща), і за локальним часом.
+
+    У CI годинник у UTC: о 00:30 у Вронках там ще «вчора», і новина, датована
+    сьогоднішнім днем без часу, відкидалася як стара (і назавжди позначалась
+    обробленою).
+    """
+    days = {datetime.now().strftime("%d.%m.%Y")}
+    try:
+        from zoneinfo import ZoneInfo
+        days.add(datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y"))
+    except Exception:
+        pass
+    return days
 
 
 def load_state():
@@ -399,10 +491,46 @@ def load_state():
     return set(), set()
 
 
+# Скільки ключів зберігати. Один прогін бачить до ~840 позицій (29 HTML × 20 +
+# 8 RSS × 30 + TG 20), і всі старі позначаються як оброблені, тож ліміт має бути
+# з великим запасом, інакше стан «перемелює» сам себе щопрогону.
+STATE_LIMIT = 5000
+
+
+def _ordered_tail(keys, previous, limit=None):
+    """Ключі в порядку додавання (старі — першими), лише останні `limit`.
+
+    Раніше було `sorted(keys)[-800:]`: при переповненні викидались не НАЙСТАРІШІ,
+    а алфавітно перші URL/заголовки. Вони знову ставали «новими», і новина з датою
+    без часу (свіжа весь день) могла піти в канал повторно.
+    """
+    keys = set(keys)
+    kept = []
+    seen = set()
+    for k in previous or []:
+        if k in keys and k not in seen:
+            kept.append(k)
+            seen.add(k)
+    kept.extend(sorted(keys - seen))
+    limit = STATE_LIMIT if limit is None else limit
+    return kept[-limit:] if limit else kept
+
+
+def _previous_state():
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        return list(d.get("posted", [])), list(d.get("titles", []))
+    except Exception:
+        return [], []
+
+
 def save_state(posted, titles):
+    prev_posted, prev_titles = _previous_state()
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"posted": sorted(posted)[-800:], "titles": sorted(titles)[-800:]},
+        json.dump({"posted": _ordered_tail(posted, prev_posted),
+                   "titles": _ordered_tail(titles, prev_titles)},
                   f, ensure_ascii=False, indent=2)
     os.replace(tmp, STATE_FILE)
 
@@ -447,7 +575,7 @@ def build_caption(item, cfg, date=""):
         lines += [f"<b>{esc(title)}</b>", ""]
         if summary:
             lines += [esc(summary), ""]
-    lines.append(f'<a href="{item["url"]}">Читати повністю</a>')
+    lines.append(f'<a href="{esc(item["url"])}">Читати повністю</a>')
     lines.append("")
     if date:
         lines.append(f"Опубліковано в джерелі / Data publikacji: {date}")
@@ -459,8 +587,18 @@ def build_caption(item, cfg, date=""):
 
 
 def tg(method, token, payload, _retry=True):
+    """Виклик Bot API. Повторюємо на 429, 5xx і мережевих збоях."""
     url = TELEGRAM_API.format(token=token, method=method)
-    r = requests.post(url, json=payload, timeout=20)
+    try:
+        r = requests.post(url, json=payload, timeout=20)
+    except requests.RequestException as e:
+        log.error("Telegram %s: мережа (%s)", method, type(e).__name__)
+        # Повторюємо, лише якщо з'єднання не встановилося. Після ReadTimeout
+        # повідомлення могло вже дійти — повтор дав би дубль у каналі.
+        if _retry and isinstance(e, requests.ConnectionError):
+            time.sleep(3)
+            return tg(method, token, payload, _retry=False)
+        return False
     if r.status_code == 429 and _retry:
         try:
             ra = int(r.json().get("parameters", {}).get("retry_after", 5))
@@ -468,6 +606,10 @@ def tg(method, token, payload, _retry=True):
             ra = 5
         log.warning("Ліміт Telegram — чекаю %s с і повторюю", ra)
         time.sleep(ra + 1)
+        return tg(method, token, payload, _retry=False)
+    if r.status_code >= 500 and _retry:
+        log.warning("Telegram %s → %s, повторюю за 3 с", method, r.status_code)
+        time.sleep(3)
         return tg(method, token, payload, _retry=False)
     if r.status_code != 200:
         log.error("Telegram %s → %s: %s", method, r.status_code, r.text[:300])
@@ -522,7 +664,8 @@ def main():
     log.info("Режим: %s | канал: %s | радіус: %s км | центр: %s",
              "DRY-RUN" if dry_run else "ПУБЛІКАЦІЯ", chat_id, cfg.get("radius_km"), cfg["center"]["name"])
 
-    posted, seen_titles = load_state()
+    posted_raw, seen_titles = load_state()
+    posted = {canon_url(u) for u in posted_raw}
     items = collect_items(cfg)
     sources = active_sources(cfg)
     if not items and sources:
@@ -530,13 +673,13 @@ def main():
         # блокування. Краще червоний прогін, ніж зелений і тихий.
         log.error("Жодне з %d увімкнених джерел не дало новин — перевір доступ до джерел.", len(sources))
         return 1
-    skip = set(cfg.get("skip_urls", []))
+    skip = {canon_url(u) for u in cfg.get("skip_urls", [])}
     if skip:
-        items = [it for it in items if it["url"] not in skip]
+        items = [it for it in items if canon_url(it["url"]) not in skip]
 
     if cfg.get("seed_all"):
         for it in items:
-            posted.add(it["url"])
+            posted.add(canon_url(it["url"]))
             tk = normalize_title(it["title"])
             if tk:
                 seen_titles.add(tk)
@@ -554,7 +697,7 @@ def main():
     meta_budget = int(cfg.get("max_items", 6)) * 8
     for it in items:
         tk = normalize_title(it["title"])
-        if it["url"] in posted or (tk and (tk in seen_titles or tk in batch_titles)):
+        if canon_url(it["url"]) in posted or (tk and (tk in seen_titles or tk in batch_titles)):
             continue
         batch_titles.add(tk)
         ts = it.get("ts") or 0
@@ -577,7 +720,7 @@ def main():
 
     def mark_stale():
         for it in stale:
-            posted.add(it["url"])
+            posted.add(canon_url(it["url"]))
             tk = normalize_title(it["title"])
             if tk:
                 seen_titles.add(tk)
@@ -594,7 +737,7 @@ def main():
     for it in fresh:
         if send_item(it, token, chat_id, dry_run, cfg):
             if not dry_run:
-                posted.add(it["url"])
+                posted.add(canon_url(it["url"]))
                 tk = normalize_title(it["title"])
                 if tk:
                     seen_titles.add(tk)

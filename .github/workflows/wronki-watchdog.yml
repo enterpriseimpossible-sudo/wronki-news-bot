@@ -1,0 +1,64 @@
+name: Wronki watchdog
+
+# Незалежний сторож публікації. Раз на 30 хв запускає monitor.py:
+#   • останній УСПІШНИЙ прогін wronki.yml не старший за 3 год;
+#   • самоланцюжок живий: є прогін із workflow_dispatch за останні 30 хв
+#     (ловить випадок «прогони зелені, а наступний не поставлено» — як 20.10.2026);
+#   • останній пост у каналі не старший за 24 год (публічний t.me/s, якщо є username).
+# Якщо ланцюжок мертвий — пробує його підняти (dispatch_next.sh --force).
+# Якщо щось застаріло або перевірка не вдалася — job ЧЕРВОНИЙ (GitHub надішле лист
+# про невдалий scheduled-прогін) і, якщо задано WRONKI_ALERT_CHAT_ID, алерт у Telegram
+# (ніколи не в сам канал — це гарантує monitor.py).
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: wronki-watchdog
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check freshness (monitor.py)
+        id: monitor
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WRONKI_REPO: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          WRONKI_ALERT_CHAT_ID: ${{ secrets.WRONKI_ALERT_CHAT_ID }}
+        run: >-
+          python monitor.py
+          --max-run-age-hours 3
+          --max-post-age-hours 24
+          --max-chain-gap-minutes 30
+      - name: Revive self-chain
+        if: steps.monitor.outputs.chain_dead == 'true'
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: wronki.yml
+          REF: main
+          THIS_RUN_ID: ${{ github.run_id }}
+          CHAIN_DELAY_SECONDS: "0"
+        run: bash scripts/dispatch_next.sh --force
+      - name: Fail loudly if stale or check failed
+        if: steps.monitor.outcome == 'failure'
+        run: |
+          echo "::error title=Wronki watchdog::Публікація застаріла або перевірку не виконано — див. крок 'Check freshness'."
+          exit 1

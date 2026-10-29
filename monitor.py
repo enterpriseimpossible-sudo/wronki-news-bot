@@ -3,11 +3,13 @@
 """
 monitor.py — сторож сервісу «Новини Вронки та околиці».
 
-Перевіряє два незалежні сигнали живості:
+Перевіряє три незалежні сигнали живості:
 
-  1. GitHub Actions — коли востаннє УСПІШНО завершився workflow `wronki.yml`
-     (тобто чи живий самоланцюжок).
-  2. Telegram-канал — коли опубліковано останній пост
+  1. GitHub Actions — коли востаннє УСПІШНО завершився workflow `wronki.yml`.
+  2. Самоланцюжок — чи є свіжий прогін, поставлений через workflow_dispatch
+     (ланцюжок/ручний запуск). Ловить випадок «останній прогін зелений, а
+     наступний не поставлено» і стан, коли бота тримає лише schedule-страховка.
+  3. Telegram-канал — коли опубліковано останній пост
      (читає публічний прев'ю https://t.me/s/<username>, токен каналу не потрібен,
       окрім визначення username через getChat).
 
@@ -23,6 +25,7 @@ monitor.py — сторож сервісу «Новини Вронки та ок
 Приклади:
   python monitor.py
   python monitor.py --max-run-age-hours 3 --max-post-age-hours 24
+  python monitor.py --max-chain-gap-minutes 30
   python monitor.py --json
 """
 
@@ -153,6 +156,81 @@ def check_actions(repo: str, workflow: str, token: str | None, limit_h: float,
             "run_number": run.get("run_number"), "run_url": run.get("html_url")}
 
 
+ACTIVE_RUN_STATUSES = ("queued", "in_progress", "waiting", "requested", "pending")
+CHAIN_EVENT = "workflow_dispatch"
+
+
+def evaluate_chain(runs: list[dict], now: datetime, max_gap_min: float) -> dict:
+    """Чи живий самоланцюжок — чиста функція над списком прогонів (новіші першими).
+
+    Ланцюжок живий, якщо прогін із події workflow_dispatch зараз у черзі/виконується
+    або був створений не раніше ніж max_gap_min хвилин тому. Інакше — FAIL, навіть
+    якщо останній прогін зелений (саме так ланцюжок помер 20.10.2026) або бота
+    ще тримає schedule-страховка.
+    """
+    name = "Самоланцюжок"
+    limit_h = float(max_gap_min) / 60.0
+    if not runs:
+        return {"name": name, "status": STATUS_FAIL, "age_h": None,
+                "detail": "немає жодного прогону wronki.yml"}
+
+    chain_runs = [r for r in runs if r.get("event") == CHAIN_EVENT]
+    active = [r for r in chain_runs if r.get("status") in ACTIVE_RUN_STATUSES]
+    if active:
+        run = active[0]
+        return {"name": name, "status": STATUS_OK, "age_h": 0.0,
+                "detail": "№%s зараз %s" % (run.get("run_number", "?"), run.get("status")),
+                "run_number": run.get("run_number")}
+
+    newest = runs[0]
+    newest_desc = "останній прогін №%s (%s, %s)" % (
+        newest.get("run_number", "?"), newest.get("event", "?"),
+        newest.get("conclusion") or newest.get("status") or "?")
+
+    if not chain_runs:
+        return {"name": name, "status": STATUS_FAIL, "age_h": None,
+                "detail": "у %d останніх прогонах немає жодного з workflow_dispatch — "
+                          "ланцюжок не працює; %s" % (len(runs), newest_desc)}
+
+    run = chain_runs[0]
+    created = parse_iso(run.get("created_at")) or parse_iso(run.get("run_started_at"))         or parse_iso(run.get("updated_at"))
+    age = age_hours(created, now)
+    status = verdict(age, limit_h)
+    if status == STATUS_OK:
+        detail = "останній dispatch-прогін №%s створено %s тому (ліміт %s хв)" % (
+            run.get("run_number", "?"), human_age(age), _fmt_limit(max_gap_min))
+    else:
+        detail = ("ланцюжок обірвано: останній dispatch-прогін №%s (%s) створено %s тому, "
+                  "наступний не поставлено (ліміт %s хв); %s") % (
+            run.get("run_number", "?"), run.get("conclusion") or run.get("status") or "?",
+            human_age(age), _fmt_limit(max_gap_min), newest_desc)
+    return {"name": name, "status": status, "age_h": age, "detail": detail,
+            "run_number": run.get("run_number"), "run_url": run.get("html_url")}
+
+
+def check_chain(repo: str, workflow: str, token: str | None, max_gap_min: float,
+                now: datetime, timeout: int = 20, per_page: int = 30) -> dict:
+    """Останні прогони workflow (будь-який статус) -> evaluate_chain."""
+    headers = {"Accept": "application/vnd.github+json",
+               "X-GitHub-Api-Version": "2022-11-28",
+               "User-Agent": USER_AGENT}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = f"{GITHUB_API}/repos/{repo}/actions/workflows/{workflow}/runs"
+    try:
+        resp = requests.get(url, headers=headers, params={"per_page": per_page},
+                            timeout=timeout)
+    except requests.RequestException as exc:
+        raise MonitorError(f"GitHub API недоступний ({type(exc).__name__})") from None
+    if resp.status_code != 200:
+        raise MonitorError(f"GitHub API повернув HTTP {resp.status_code}: {resp.text[:160]}")
+    try:
+        runs = (resp.json() or {}).get("workflow_runs") or []
+    except ValueError:
+        raise MonitorError("GitHub API повернув не-JSON") from None
+    return evaluate_chain(runs, now, max_gap_min)
+
+
 # -------------------------------------------------------------------- Telegram
 def _tg_get(token: str, method: str, params: dict, timeout: int = 20) -> dict:
     """Виклик Bot API. Ніколи не тягне токен у текст помилки."""
@@ -254,6 +332,8 @@ def parse_args(argv=None):
                         help="максимальний вік останнього успішного прогону (год)")
     parser.add_argument("--max-post-age-hours", type=float, default=24.0,
                         help="максимальний вік останнього поста в каналі (год)")
+    parser.add_argument("--max-chain-gap-minutes", type=float, default=30.0,
+                        help="максимальна пауза між прогонами самоланцюжка (хв)")
     parser.add_argument("--alert-chat", default=os.environ.get("WRONKI_ALERT_CHAT_ID", ""),
                         help="chat_id для алертів (НЕ канал)")
     parser.add_argument("--json", action="store_true", help="вивести результат як JSON")
@@ -274,6 +354,8 @@ def main(argv=None) -> int:
     for name, fn in (
         ("GitHub Actions", lambda: check_actions(
             args.repo, args.workflow, github_token, args.max_run_age_hours, now)),
+        ("Самоланцюжок", lambda: check_chain(
+            args.repo, args.workflow, github_token, args.max_chain_gap_minutes, now)),
         ("Telegram-канал", lambda: check_channel(
             tg_token, channel_id, args.max_post_age_hours, now)),
     ):
@@ -285,7 +367,7 @@ def main(argv=None) -> int:
                            "detail": str(exc)})
 
     stale = any(c["status"] == STATUS_FAIL for c in checks)
-    chain_dead = any(c["status"] == STATUS_FAIL and c["name"] == "GitHub Actions"
+    chain_dead = any(c["status"] == STATUS_FAIL and c["name"] in ("GitHub Actions", "Самоланцюжок")
                      for c in checks)
 
     if args.json:

@@ -17,6 +17,7 @@
 #   THIS_RUN_ID  id поточного прогону (типово $GITHUB_RUN_ID)
 #   MAX_ATTEMPTS кількість спроб (типово 3)
 #   CHAIN_DELAY_SECONDS  пауза перед постановкою наступного прогону (типово 60)
+#   RETRY_SLEEP_SECONDS  база паузи між спробами: N, 2N, ... (типово 5)
 #
 # Аргументи:
 #   --force      не перевіряти, чи ланцюжок уже живий (для watchdog/ручного запуску)
@@ -29,6 +30,7 @@ THIS_RUN_ID="${THIS_RUN_ID:-${GITHUB_RUN_ID:-0}}"
 API_VERSION="2022-11-28"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-3}"
 CHAIN_DELAY_SECONDS="${CHAIN_DELAY_SECONDS:-60}"
+RETRY_SLEEP_SECONDS="${RETRY_SLEEP_SECONDS:-5}"
 
 FORCE=0
 for arg in "$@"; do
@@ -131,7 +133,7 @@ while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     log "Відповідь GitHub: $(head -c 500 "$BODY_FILE")"
   fi
   if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    sleep $(( attempt * 5 ))
+    sleep $(( attempt * RETRY_SLEEP_SECONDS ))
   fi
   attempt=$(( attempt + 1 ))
 done

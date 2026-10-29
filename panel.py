@@ -176,9 +176,13 @@ def update_workflow_cron(cfg):
     if text2 == text:
         return True
 
+    # Спершу пуш, потім локальний запис. Інакше при невдалому пуші (типово: токен
+    # без scope `workflow`) локальний workflow тихо розходився з репозиторієм.
+    if not push_file(".github/workflows/wronki.yml", text2, "update schedule"):
+        return False
     with open(WORKFLOW_FILE, "w", encoding="utf-8") as handle:
         handle.write(text2)
-    return push_file(".github/workflows/wronki.yml", text2, "update schedule")
+    return True
 
 
 def trigger_cloud():
