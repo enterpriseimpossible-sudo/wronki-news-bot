@@ -183,7 +183,7 @@ def test_main_publishes_only_fresh(monkeypatch):
     })
     monkeypatch.setattr(bot, "collect_items", lambda cfg: items)
     monkeypatch.setattr(bot, "load_state", lambda: (set(), set()))
-    monkeypatch.setattr(bot, "save_state", lambda posted, titles: None)
+    monkeypatch.setattr(bot, "save_state", lambda posted, titles, last_run=None: None)
     monkeypatch.setattr(bot, "send_item", lambda it, *a, **k: (sent.append(it["url"]), True)[1])
     monkeypatch.setattr(bot, "fetch_meta", lambda url: (None, "", 0))
     monkeypatch.setattr(bot.time, "sleep", lambda s: None)
@@ -212,7 +212,7 @@ def test_main_ignores_already_posted(monkeypatch):
     })
     monkeypatch.setattr(bot, "collect_items", lambda cfg: items)
     monkeypatch.setattr(bot, "load_state", lambda: ({"http://dup"}, set()))
-    monkeypatch.setattr(bot, "save_state", lambda posted, titles: None)
+    monkeypatch.setattr(bot, "save_state", lambda posted, titles, last_run=None: None)
     monkeypatch.setattr(bot, "send_item", lambda *a, **k: (sent.append(a[0]["url"]), True)[1])
     monkeypatch.setattr(bot.time, "sleep", lambda s: None)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "x")
@@ -241,7 +241,7 @@ def test_main_ignores_posted_url_with_tracking_params(monkeypatch):
     monkeypatch.setattr(bot, "collect_items", lambda cfg: items)
     monkeypatch.setattr(bot, "load_state",
                         lambda: ({"https://www.wronki.pl/a/?utm_source=rss#top"}, set()))
-    monkeypatch.setattr(bot, "save_state", lambda posted, titles: None)
+    monkeypatch.setattr(bot, "save_state", lambda posted, titles, last_run=None: None)
     monkeypatch.setattr(bot, "send_item", lambda *a, **k: (sent.append(a[0]["url"]), True)[1])
     monkeypatch.setattr(bot.time, "sleep", lambda s: None)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "x")
@@ -484,3 +484,74 @@ def test_is_fresh_date_only_uses_warsaw_today():
         pytest.skip("немає бази часових зон (tzdata) — перевіряється в CI на Linux")
     assert bot.is_fresh(0, time.time() - 3600, warsaw_today) is True
     assert bot.is_fresh(0, time.time() - 3600, "01.01.2001") is False
+
+
+# ---------------------------------------------------------- добирання після перерви
+_REAL_LOAD_LAST_RUN = bot.load_last_run  # до підміни в conftest (імпорт модуля — раніше фікстури)
+
+
+def test_main_publishes_news_missed_during_gap(monkeypatch):
+    """Ланцюжок стояв 6 год: новина 3-годинної давності має піти в канал, 30-годинна — ні."""
+    now = time.time()
+    items = [
+        {"title": "Під час перерви", "url": "http://gap", "summary": "", "image": None,
+         "source": "s", "date": "", "ts": now - 3 * 3600},
+        {"title": "Дуже стара", "url": "http://ancient", "summary": "", "image": None,
+         "source": "s", "date": "", "ts": now - 30 * 3600},
+    ]
+    sent, marks = [], []
+    monkeypatch.setattr(bot, "load_env", lambda: None)
+    monkeypatch.setattr(bot, "load_config", lambda: {
+        "enabled": True, "instant": True, "publish_hours": [],
+        "max_items": 5, "max_age_hours": 1,
+        "center": {"name": "Wronki"}, "skip_urls": [], "sources": [],
+    })
+    monkeypatch.setattr(bot, "collect_items", lambda cfg: items)
+    monkeypatch.setattr(bot, "load_state", lambda: (set(), set()))
+    monkeypatch.setattr(bot, "load_last_run", lambda: now - 6 * 3600)
+    monkeypatch.setattr(bot, "save_state", lambda posted, titles, last_run=None: marks.append(last_run))
+    monkeypatch.setattr(bot, "send_item", lambda it, *a, **k: (sent.append(it["url"]), True)[1])
+    monkeypatch.setattr(bot, "fetch_meta", lambda url: (None, "", 0))
+    monkeypatch.setattr(bot.time, "sleep", lambda s: None)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "x")
+    monkeypatch.setenv("TELEGRAM_CHANNEL_ID", "y")
+    monkeypatch.setenv("DRY_RUN", "0")
+
+    bot.main()
+
+    assert sent == ["http://gap"]
+    assert marks and marks[-1] and marks[-1] >= now  # позначка прогону посунулась
+
+
+def test_fresh_cutoff_normal_run_is_one_hour():
+    now = 1_800_000_000
+    assert bot.fresh_cutoff(now, 1, now - 120) == now - 3600
+
+
+def test_fresh_cutoff_catches_up_after_gap():
+    # 6.11.2026: ланцюжок стояв 6 год — новини за цей час не мають губитися.
+    now = 1_800_000_000
+    last = now - 6 * 3600
+    assert bot.fresh_cutoff(now, 1, last) == last - bot.CATCH_UP_MARGIN_S
+
+
+def test_fresh_cutoff_capped_at_one_day():
+    now = 1_800_000_000
+    assert bot.fresh_cutoff(now, 1, now - 5 * 86400) == now - 24 * 3600
+
+
+def test_fresh_cutoff_disabled_and_first_run():
+    now = 1_800_000_000
+    assert bot.fresh_cutoff(now, 0, now - 9999) == 0
+    assert bot.fresh_cutoff(now, 1, 0) == now - 3600
+
+
+def test_save_state_keeps_last_run_when_not_given(tmp_path, monkeypatch):
+    monkeypatch.setattr(bot, "STATE_FILE", str(tmp_path / "state.json"))
+    monkeypatch.setattr(bot, "load_last_run", _REAL_LOAD_LAST_RUN)
+    bot.save_state({"u1"}, {"t1"}, 123.0)
+    assert bot.load_last_run() == 123.0
+    bot.save_state({"u1", "u2"}, {"t1"})
+    assert bot.load_last_run() == 123.0
+    bot.save_state({"u1"}, {"t1"}, 456.0)
+    assert bot.load_last_run() == 456.0

@@ -525,13 +525,49 @@ def _previous_state():
         return [], []
 
 
-def save_state(posted, titles):
+def load_last_run():
+    """Початок останнього завершеного прогону з публікацією (timestamp) або 0."""
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            return float(json.load(f).get("last_run") or 0)
+    except Exception:
+        return 0.0
+
+
+# Наскільки далеко назад бот добирає пропущене після перерви в прогонах.
+CATCH_UP_CAP_HOURS = 24
+# Запас на годинник джерел і на час самого прогону.
+CATCH_UP_MARGIN_S = 600
+
+
+def fresh_cutoff(now, max_age_h, last_run=0.0, cap_h=CATCH_UP_CAP_HOURS):
+    """Межа «свіжості» з добиранням пропущеного.
+
+    6.11.2026 ланцюжок прогонів обірвався на 6 год (страховий schedule GitHub
+    спрацював лише через 6 год). Після відновлення все, що вийшло за ці 6 год,
+    було старшим за 1 год, вважалося старим, позначалось обробленим — і три новини
+    так і не потрапили в канал. Тепер межа — не пізніше за початок минулого прогону
+    (з запасом), але не далі ніж cap_h годин назад.
+    """
+    if max_age_h <= 0:
+        return 0
+    cutoff = now - max_age_h * 3600
+    if last_run:
+        cutoff = min(cutoff, last_run - CATCH_UP_MARGIN_S)
+    return max(cutoff, now - cap_h * 3600)
+
+
+def save_state(posted, titles, last_run=None):
+    """last_run=None — лишити попередню позначку прогону без змін."""
     prev_posted, prev_titles = _previous_state()
+    data = {"posted": _ordered_tail(posted, prev_posted),
+            "titles": _ordered_tail(titles, prev_titles)}
+    keep = load_last_run() if last_run is None else last_run
+    if keep:
+        data["last_run"] = keep
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"posted": _ordered_tail(posted, prev_posted),
-                   "titles": _ordered_tail(titles, prev_titles)},
-                  f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, STATE_FILE)
 
 
@@ -664,6 +700,7 @@ def main():
     log.info("Режим: %s | канал: %s | радіус: %s км | центр: %s",
              "DRY-RUN" if dry_run else "ПУБЛІКАЦІЯ", chat_id, cfg.get("radius_km"), cfg["center"]["name"])
 
+    run_started = time.time()
     posted_raw, seen_titles = load_state()
     posted = {canon_url(u) for u in posted_raw}
     items = collect_items(cfg)
@@ -689,7 +726,7 @@ def main():
         return
 
     max_age_h = max(0.0, float(cfg.get("max_age_hours", 0)))
-    cutoff = (time.time() - max_age_h * 3600) if max_age_h > 0 else 0
+    cutoff = fresh_cutoff(run_started, max_age_h, load_last_run())
 
     batch_titles = set()
     fresh = []
@@ -714,7 +751,10 @@ def main():
             stale.append(it)
             continue
         fresh.append(it)
-    fresh = fresh[: int(cfg.get("max_items", 6))]
+    limit = int(cfg.get("max_items", 6))
+    # Якщо свіжого більше за ліміт, позначку прогону не рухаємо: решту доберуть наступні прогони.
+    next_mark = None if len(fresh) > limit else run_started
+    fresh = fresh[:limit]
     log.info("Нових для публікації: %d | старих/без дати: %d (зібрано %d)",
              len(fresh), len(stale), len(items))
 
@@ -728,7 +768,7 @@ def main():
     if not fresh:
         if not dry_run:
             mark_stale()
-            save_state(posted, seen_titles)
+            save_state(posted, seen_titles, next_mark)
         log.info("Нічого нового (свіжого).")
         return
 
@@ -749,7 +789,8 @@ def main():
 
     if not dry_run:
         mark_stale()
-        save_state(posted, seen_titles)
+        # Невдалі публікації: позначку не рухаємо, щоб наступний прогін спробував ще раз.
+        save_state(posted, seen_titles, None if failed else next_mark)
     log.info("Готово. Надіслано: %d, не вдалося: %d (стан збережено: %s)",
              sent, failed, "ні" if dry_run else "так")
     if failed and not dry_run:
